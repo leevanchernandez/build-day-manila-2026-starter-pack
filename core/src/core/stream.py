@@ -17,7 +17,7 @@ async def start_stream(url: str, token: str) -> AsyncIterator[Frame]:
 
     Args:
         url: The LiveKit server URL (e.g. wss://project.livekit.cloud).
-        token: A subscribe-only JWT token from GET /feed.
+        token: A subscribe-only JWT token from GET /api/feed.
 
     Yields:
         Frame objects with a PIL Image and timestamp.

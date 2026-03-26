@@ -44,7 +44,10 @@ uv run -m agent --practice --fps 2       # sample 2 frames/sec
 
 ### Live Mode (event day)
 
-Connects to the game server and LiveKit stream. Requires `API_URL` and `TEAM_TOKEN` in your `.env`.
+Connects to the dashboard’s HTTP API and LiveKit stream. Set these in `.env` (see `.env.example`):
+
+- **`API_URL`** — dashboard origin only, e.g. `https://your-app.workers.dev` (no trailing slash).
+- **`TEAM_TOKEN`** — your team’s API key (same as the dashboard `team.api_key`).
 
 ```bash
 uv run -m agent --live
@@ -55,8 +58,8 @@ uv run -m agent --live
 1. A frame is captured (from your camera or the live stream)
 2. Your `analyze()` function in `agent/prompt.py` receives the frame
 3. You send it to a vision LLM and return a guess (or `None` to skip)
-4. If in live mode, the guess is submitted via `POST /guess`
-5. If correct (HTTP 200), you win. If wrong (HTTP 400), keep guessing.
+4. If in live mode, the guess is submitted via `POST /api/guess` (plain text body)
+5. If correct (HTTP 201), you win. If wrong (HTTP 409), keep guessing. The server may return 401 (bad token), 404 (no round), or 429 (max guesses).
 6. The round ends when the admin closes the stream.
 
 ## What to Edit

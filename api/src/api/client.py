@@ -6,7 +6,13 @@ import os
 
 import httpx
 
-from api.models import Feed, GuessResult, NoActiveRound
+from api.models import (
+    Feed,
+    GuessResult,
+    MaxGuessesReached,
+    NoActiveRound,
+    Unauthorized,
+)
 
 
 class CasperAPI:
@@ -49,8 +55,12 @@ class CasperAPI:
 
         Raises:
             NoActiveRound: If no round is currently active (404).
+            Unauthorized: If the team token is invalid (401).
         """
-        resp = await self._client.get("/feed")
+        resp = await self._client.get("/api/feed")
+
+        if resp.status_code == 401:
+            raise Unauthorized()
 
         if resp.status_code == 404:
             raise NoActiveRound()
@@ -66,27 +76,41 @@ class CasperAPI:
 
         Returns:
             GuessResult indicating whether the guess was correct.
-            - 200 OK → correct = True  (you got it!)
-            - 400 Bad Request → correct = False (keep trying)
+            - 201 Created → correct = True (body is guess id as plain text)
+            - 409 Conflict → correct = False
+
+        Raises:
+            NoActiveRound: If no round is active (404).
+            Unauthorized: If the team token is invalid (401).
+            MaxGuessesReached: If the team hit the per-round guess limit (429).
         """
-        resp = await self._client.post("/guess", json={"answer": answer})
+        resp = await self._client.post(
+            "/api/guess",
+            content=answer,
+            headers={"Content-Type": "text/plain; charset=utf-8"},
+        )
 
-        if resp.status_code == 200:
-            data = resp.json() if resp.text else {}
-            return GuessResult(
-                correct=True,
-                guess_number=data.get("guess_number"),
-            )
-
-        if resp.status_code == 400:
-            data = resp.json() if resp.text else {}
-            return GuessResult(
-                correct=False,
-                guess_number=data.get("guess_number"),
-            )
+        if resp.status_code == 401:
+            raise Unauthorized()
 
         if resp.status_code == 404:
             raise NoActiveRound()
+
+        if resp.status_code == 429:
+            raise MaxGuessesReached()
+
+        if resp.status_code == 201:
+            guess_id: int | None = None
+            text = resp.text.strip()
+            if text:
+                try:
+                    guess_id = int(text)
+                except ValueError:
+                    guess_id = None
+            return GuessResult(correct=True, guess_id=guess_id)
+
+        if resp.status_code == 409:
+            return GuessResult(correct=False, guess_id=None)
 
         resp.raise_for_status()
         # Unreachable but keeps type checker happy
