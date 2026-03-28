@@ -50,7 +50,7 @@ async def analyze(frame: Frame) -> str | None:
     from pydantic_ai import Agent, BinaryContent
     from pydantic_ai.models.openrouter import OpenRouterModel
     from pydantic_ai.providers.openrouter import OpenRouterProvider
-
+    import os
     image_stream = io.BytesIO()
     # Saving as JPEG is usually safest and most efficient for API calls
     frame.image.save(image_stream, format="JPEG") 
@@ -59,7 +59,7 @@ async def analyze(frame: Frame) -> str | None:
     # 2. Initialize the OpenRouter model
     model = OpenRouterModel(
         "anthropic/claude-3.5-sonnet",
-        provider=OpenRouterProvider(api_key="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"),
+        provider=OpenRouterProvider(api_key=os.getenv("OPENROUTER_API_KEY")),
     )
     agent = Agent(model)
 
