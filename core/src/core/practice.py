@@ -43,8 +43,9 @@ def _build_capture_cmd(ffmpeg: str, camera_index: int) -> list[str]:
         input_fmt = ["-f", "avfoundation", "-framerate", "30"]
         device = str(camera_index)
     elif system == "Windows":
-        input_fmt = ["-f", "dshow"]
-        device = f"video={camera_index}"
+        input_fmt = ["-f", "dshow", "-video_size", "640x480"]
+        # Hardcoding the exact camera name to bypass the faulty regex
+        device = "video=ACER HD User Facing"
     else:
         input_fmt = ["-f", "v4l2"]
         device = f"/dev/video{camera_index}"

@@ -1,19 +1,20 @@
-"""System prompt and analysis logic for the guessing game agent.
-
-=== EDIT THIS FILE ===
-
-This is where you define your agent's strategy:
-- What system prompt to use
-- How to analyze each frame
-- When to submit a guess vs. gather more context
-"""
-
 from __future__ import annotations
+
+import io
+import os
+from dotenv import load_dotenv
+
+from pydantic_ai import Agent, BinaryContent
+from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from core import Frame
 
+# Force load the environment variables directly in this file
+load_dotenv()
+
 # ---------------------------------------------------------------------------
-# System prompt — tweak this to improve your agent's guessing ability.
+# System prompt
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """\
@@ -28,36 +29,45 @@ Rules:
 - You only get to see one frame at a time, so make it count.
 """
 
+# ---------------------------------------------------------------------------
+# Agent setup
+# ---------------------------------------------------------------------------
 
-async def analyze(frame: Frame) -> str | None:
-    """Analyze a single frame and return a guess, or None to skip.
+vision_model_id = "anthropic/claude-3.5-sonnet" 
 
-    This is the core function you should customize. The default
-    implementation is a simple placeholder that always skips.
+llm_api_key = os.environ.get("LLM_API_KEY")
+if not llm_api_key:
+    raise RuntimeError(
+        "Could not find LLM_API_KEY. Please ensure your .env file is saved in the "
+        "root directory and does not have a hidden .txt extension."
+    )
 
-    Args:
-        frame: A Frame with .image (PIL Image) and .timestamp.
+model = OpenRouterModel(
+    vision_model_id,
+    provider=OpenRouterProvider(
+        api_key=llm_api_key
+    ),
+)
 
-    Returns:
-        A text guess string, or None to skip this frame.
-    """
-    # -----------------------------------------------------------------
-    # TODO: Replace this with your actual vision LLM call.
-    #
-    # Example with pydantic-ai:
-    #
-    #   from pydantic_ai import Agent
-    #   agent = Agent("claude-sonnet-4-20250514", system_prompt=SYSTEM_PROMPT)
-    #   result = await agent.run(
-    #       "What do you see in this image?",
-    #       # attach the frame image here
-    #   )
-    #   answer = result.output.strip()
-    #   return None if answer == "SKIP" else answer
-    # -----------------------------------------------------------------
+agent = Agent(model, system_prompt=SYSTEM_PROMPT)
 
-    print(f"  [agent] Got frame at {frame.timestamp.isoformat()} "
-          f"({frame.image.size[0]}x{frame.image.size[1]})")
-    print("  [agent] No LLM configured yet — edit agent/prompt.py!")
+async def analyzeFrame(frame: Frame) -> str | None:
+    """Analyze a single frame and return a guess, or None to skip."""
+    
+    # Convert PIL Image to PNG bytes for the LLM
+    image_buffer = io.BytesIO()
+    frame.image.save(image_buffer, format="PNG")
+    image_bytes = image_buffer.getvalue()
 
-    return None
+    result_response = await agent.run(
+        [
+            "What do you see in this image? Give your best guess.",
+            BinaryContent(data=image_bytes, media_type="image/png"),
+        ],
+    )
+    
+    answer_string = result_response.output.strip()
+    return None if answer_string == "SKIP" else answer_string
+
+# Alias to keep compatibility with __main__.py which imports 'analyze'
+analyze = analyzeFrame
