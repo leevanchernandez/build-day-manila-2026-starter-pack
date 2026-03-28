@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import platform
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from typing import AsyncIterator
 
@@ -31,6 +32,31 @@ def _detect_ffmpeg() -> str:
     )
 
 
+def _get_windows_device(camera_index: int) -> str:
+    """Get the DirectShow device name for the given camera index."""
+    ffmpeg = _detect_ffmpeg()
+    cmd = [ffmpeg, "-f", "dshow", "-list_devices", "true", "-i", "list"]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    output = proc.stdout + '\n' + proc.stderr
+    lines = output.split('\n')
+    devices = []
+    for line in lines:
+        if '(audio)' in line:
+            break
+        if '(video)' in line and 'Alternative name' not in line:
+            start = line.find('"')
+            end = line.rfind('"')
+            if start != -1 and end != -1 and end > start:
+                device_name = line[start+1:end]
+                devices.append(device_name)
+    print(f"Available devices: {devices}")
+    if camera_index >= len(devices):
+        raise ValueError(f"Camera index {camera_index} not found. Available devices: {devices}")
+    selected = devices[camera_index]
+    print(f"Selected device: {selected}")
+    return f"video={selected}"
+
+
 def _build_capture_cmd(ffmpeg: str, camera_index: int) -> list[str]:
     """Build a platform-appropriate ffmpeg command for single-frame capture."""
     system = platform.system()
@@ -44,7 +70,8 @@ def _build_capture_cmd(ffmpeg: str, camera_index: int) -> list[str]:
         device = str(camera_index)
     elif system == "Windows":
         input_fmt = ["-f", "dshow"]
-        device = f"video={camera_index}"
+        device = _get_windows_device(camera_index)
+        print(f"device = {device}")
     else:
         input_fmt = ["-f", "v4l2"]
         device = f"/dev/video{camera_index}"

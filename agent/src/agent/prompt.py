@@ -45,19 +45,31 @@ async def analyze(frame: Frame) -> str | None:
     # TODO: Replace this with your actual vision LLM call.
     #
     # Example with pydantic-ai:
-    #
-    #   from pydantic_ai import Agent
-    #   agent = Agent("claude-sonnet-4-20250514", system_prompt=SYSTEM_PROMPT)
-    #   result = await agent.run(
-    #       "What do you see in this image?",
-    #       # attach the frame image here
-    #   )
-    #   answer = result.output.strip()
-    #   return None if answer == "SKIP" else answer
-    # -----------------------------------------------------------------
+    
+    import io
+    from pydantic_ai import Agent, BinaryContent
+    from pydantic_ai.models.openrouter import OpenRouterModel
+    from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-    print(f"  [agent] Got frame at {frame.timestamp.isoformat()} "
-          f"({frame.image.size[0]}x{frame.image.size[1]})")
-    print("  [agent] No LLM configured yet — edit agent/prompt.py!")
+    image_stream = io.BytesIO()
+    # Saving as JPEG is usually safest and most efficient for API calls
+    frame.image.save(image_stream, format="JPEG") 
+    image_bytes = image_stream.getvalue()
 
-    return None
+    # 2. Initialize the OpenRouter model
+    model = OpenRouterModel(
+        "anthropic/claude-3.5-sonnet",
+        provider=OpenRouterProvider(api_key="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"),
+    )
+    agent = Agent(model)
+
+    # 3. Send the prompt and the image bytes to Claude
+    result = await agent.run(
+        [
+            "What do you see in this image? If there is nothing notable or useful, reply with exactly 'SKIP'.",
+            BinaryContent(data=image_bytes, media_type="image/jpeg")
+        ]
+    )
+    
+    answer = result.output.strip()
+    return None if answer == "SKIP" else answer
